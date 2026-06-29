@@ -17,13 +17,13 @@ Push a main
 [Stage 3: Deploy]  -->  Despliegue en Azure Container Instances (ACI)
     |
     v
-http://<dns-label>.westeurope.azurecontainer.io:5000
+http://flask13.francecentral.azurecontainer.io:5000/
 ```
 
 ### Flujo detallado
 
 1. **Test** - Instala dependencias y ejecuta `pytest` para validar la app antes de construir la imagen.
-2. **Build & Push** - Construye la imagen Docker y la sube al ACR (`acrentregable4xxx.azurecr.io`).
+2. **Build & Push** - Construye la imagen Docker y la sube al ACR (`registryentregable4.azurecr.io`).
 3. **Deploy** - Elimina la instancia ACI anterior (si existe) y crea una nueva con la imagen recién publicada, exponiendo el puerto 5000 con una etiqueta DNS pública.
 
 ## Estructura del Proyecto
@@ -45,7 +45,7 @@ proyecto-entregable-4/
 - Docker
 - Cuenta de Azure con:
   - Resource Group (`rg-entregable4`)
-  - Azure Container Registry (`acrentregable4xxx`)
+  - Azure Container Registry (`registryentregable4`)
   - Service Connection en Azure DevOps (`SC-AZURE`)
 
 ## Ejecución Local
@@ -78,7 +78,7 @@ python -m pytest -q
 | Recurso | Nombre | Propósito |
 |---------|--------|-----------|
 | Resource Group | `rg-entregable4` | Agrupación de recursos |
-| Container Registry (ACR) | `acrentregable4xxx` | Almacén de imágenes Docker |
+| Container Registry (ACR) | `registryentregable4` | Almacén de imágenes Docker |
 | Container Instances (ACI) | `aci-entregable4` | Ejecución del contenedor |
 | Service Connection | `SC-AZURE` | Autenticación del pipeline con Azure |
 

@@ -4,8 +4,8 @@ trigger:
 variables:
   azureServiceConnection: "SC-AZURE"
   resourceGroup: "rg-entregable4"
-  location: "westeurope"
-  acrName: "acrentregable4xxx"
+  location: "francecentral"
+  acrName: "registryentregable4"
   imageName: "flask-entregable4"
   imageTag: "$(Build.BuildId)"
   aciName: "aci-entregable4"
