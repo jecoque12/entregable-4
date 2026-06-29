@@ -1,0 +1,111 @@
+trigger:
+  - main
+
+variables:
+  azureServiceConnection: "SC-AZURE"
+  resourceGroup: "rg-entregable4"
+  location: "westeurope"
+  acrName: "acrentregable4xxx"
+  imageName: "flask-entregable4"
+  imageTag: "$(Build.BuildId)"
+  aciName: "aci-entregable4"
+  containerPort: "5000"
+  dnsLabel: "flask$(Build.BuildId)"
+
+pool:
+  name: "Default"
+
+stages:
+  - stage: Test
+    displayName: "Test"
+    jobs:
+      - job: pytest
+        displayName: "pytest"
+        steps:
+          - powershell: |
+              Write-Host "== Checking Python =="
+              where python
+              python --version
+            displayName: "Check Python"
+
+          - powershell: |
+              Write-Host "== Installing deps & running tests =="
+              python -m pip install --upgrade pip
+              python -m pip install -r requirements.txt
+              python -m pytest -q
+            displayName: "Install deps + pytest (system Python)"
+
+  - stage: BuildAndPush
+    displayName: "Build & Push"
+    dependsOn: Test
+    jobs:
+      - job: docker
+        displayName: "docker build/push"
+        steps:
+          - task: AzureCLI@2
+            displayName: "Docker login to ACR (admin creds)"
+            inputs:
+              azureSubscription: "$(azureServiceConnection)"
+              scriptType: ps
+              scriptLocation: inlineScript
+              inlineScript: |
+                $ErrorActionPreference = "Stop"
+                Write-Host "== Getting ACR credentials =="
+                $ACR_USER = az acr credential show -n $(acrName) --query "username" -o tsv
+                $ACR_PASS = az acr credential show -n $(acrName) --query "passwords[0].value" -o tsv
+                Write-Host "== Checking Docker =="
+                docker version
+                Write-Host "== Docker login =="
+                docker login "$(acrName).azurecr.io" -u $ACR_USER -p $ACR_PASS
+
+          - powershell: |
+              $ErrorActionPreference = "Stop"
+              $imageFull = "$(acrName).azurecr.io/$(imageName):$(imageTag)"
+              Write-Host "== Listing files =="
+              dir
+              Write-Host "== Showing Dockerfile (debug) =="
+              Get-Content .\Dockerfile
+              Write-Host "== Building image: $imageFull =="
+              docker build -t $imageFull .
+              Write-Host "== Pushing image: $imageFull =="
+              docker push $imageFull
+            displayName: "Docker build + push"
+
+  - stage: Deploy
+    displayName: "Deploy"
+    dependsOn: BuildAndPush
+    jobs:
+      - job: deploy
+        displayName: "Deploy to ACI"
+        steps:
+          - task: AzureCLI@2
+            displayName: "Create/Update ACI"
+            inputs:
+              azureSubscription: "$(azureServiceConnection)"
+              scriptType: ps
+              scriptLocation: inlineScript
+              inlineScript: |
+                $ErrorActionPreference = "Stop"
+                $IMAGE = "$(acrName).azurecr.io/$(imageName):$(imageTag)"
+                Write-Host "== Getting ACR credentials =="
+                $ACR_USER = az acr credential show -n $(acrName) --query "username" -o tsv
+                $ACR_PASS = az acr credential show -n $(acrName) --query "passwords[0].value" -o tsv
+                Write-Host "== Deleting previous ACI if exists =="
+                az container delete -g $(resourceGroup) -n $(aciName) --yes 2>$null
+                Write-Host "== Creating ACI (Linux) =="
+                az container create `
+                  -g $(resourceGroup) `
+                  -n $(aciName) `
+                  --os-type Linux `
+                  --image $IMAGE `
+                  --cpu 1 `
+                  --memory 1.5 `
+                  --registry-login-server "$(acrName).azurecr.io" `
+                  --registry-username $ACR_USER `
+                  --registry-password $ACR_PASS `
+                  --dns-name-label "$(dnsLabel)" `
+                  --ports $(containerPort) `
+                  --location $(location)
+                Write-Host "== Getting public URL =="
+                $FQDN = az container show -g $(resourceGroup) -n $(aciName) --query "ipAddress.fqdn" -o tsv
+                Write-Host " URL: http://$FQDN:$(containerPort)"
